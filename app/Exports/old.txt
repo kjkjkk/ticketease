@@ -1,0 +1,93 @@
+<?php
+
+namespace App\Exports;
+
+use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Concerns\WithStyles;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+
+class CustomReport implements FromCollection, WithHeadings, ShouldAutoSize, WithStyles
+{
+    protected $columns;
+    protected $ticketNatures;
+    protected $districts;
+    protected $dateFrom;
+    protected $dateTo;
+
+    public function __construct($columns, $ticketNatures, $districts, $dateFrom, $dateTo)
+    {
+        $this->columns = $columns;
+        $this->ticketNatures = $ticketNatures;
+        $this->districts = $districts;
+        $this->dateFrom = $dateFrom;
+        $this->dateTo = $dateTo;
+    }
+
+    /**
+     * Return a collection of data for the export.
+     */
+    public function collection()
+    {
+        $query = DB::table('tickets')
+            ->join('ticket_natures', 'tickets.ticket_nature_id', '=', 'ticket_natures.id')
+            ->join('devices', 'tickets.device_id', '=', 'devices.id')
+            ->join('districts', 'tickets.district_id', '=', 'districts.id')
+            ->join('ticket_assigns', 'tickets.id', '=', 'ticket_assigns.ticket_id')
+            ->join('ticket_completes', 'ticket_assigns.id', '=', 'ticket_completes.ticket_assign_id')
+            ->join('users AS requestor', 'requestor.id', '=', 'tickets.requestor_id')
+            ->join('users AS technician', 'technician.id', '=', 'ticket_assigns.technician_id')
+            ->whereBetween('tickets.created_at', [$this->dateFrom, $this->dateTo])
+            ->whereIn('tickets.ticket_nature_id', $this->ticketNatures)
+            ->whereIn('tickets.district_id', $this->districts);
+
+        // Select only the checked columns
+        $selectedColumns = [];
+        foreach ($this->columns as $column) {
+            $selectedColumns[] = DB::raw($column);
+        }
+
+        return $query->select($selectedColumns)->get();
+    }
+
+    public function mapHeadings()
+    {
+        return [
+            'tickets.id' => 'TICKET ID',
+            'CONCAT(requestor.firstname, " ", requestor.lastname)' => 'REQUESTOR NAME',
+            'districts.district_name' => 'DISTRICT',
+            'tickets.department' => 'DEPARTMENT',
+            'ticket_natures.ticket_nature_name' => 'TICKET NATURE',
+            'devices.device_name' => 'DEVICE',
+            'tickets.brand' => 'BRAND',
+            'tickets.model' => 'MODEL',
+            'CONCAT(technician.firstname, " ", technician.lastname)' => 'SERVICE BY',
+            'ticket_assigns.service_rendered' => 'SERVICE RENDERED',
+            'ticket_assigns.issue_found' => 'ISSUE FOUND',
+            'tickets.created_at' => 'DATE SUBMITTED',
+            'ticket_completes.created_at' => 'DATE CLOSED',
+        ];
+    }
+    public function headings(): array
+    {
+        $mappedHeadings = $this->mapHeadings();
+
+        // Only return the headings for the selected columns
+        return array_map(function ($column) use ($mappedHeadings) {
+            return $mappedHeadings[$column] ?? strtoupper($column);
+        }, $this->columns);
+    }
+    /**
+     * Style the sheet (optional).
+     */
+    public function styles(Worksheet $sheet)
+    {
+        $sheet->getStyle('A1:Z1')->applyFromArray([
+            'font' => [
+                'bold' => true,
+            ],
+        ]);
+    }
+}

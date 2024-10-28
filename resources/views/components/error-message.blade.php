@@ -1,0 +1,1 @@
+<span class="text-danger text-" style="font-size: 12px;">{{ $slot }}</span>

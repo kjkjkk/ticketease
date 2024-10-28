@@ -1,0 +1,9 @@
+Date: August 19, 2024, Monday
+Changes: 
+    I reconstructed the ticket container for unscheduled tickets
+    I did not use view
+    
+Date: August 25, 2024, Monday
+Changes:
+    I created a livewire that toggles the service status of ticketAssign
+    Make a class that create logs like Alert
